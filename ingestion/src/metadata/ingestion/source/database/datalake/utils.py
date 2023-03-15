@@ -22,7 +22,7 @@ from typing import List, Union
 import pandas as pd
 from avro.datafile import DataFileReader
 from avro.io import DatumReader
-
+from avro.errors import InvalidAvroBinaryEncoding
 from metadata.generated.schema.entity.data.table import Column
 from metadata.generated.schema.type.schema import DataTypeTopic
 from metadata.ingestion.source.database.datalake.models import DatalakeColumnWrapper
@@ -43,9 +43,6 @@ PD_AVRO_FIELD_MAP = {
 }
 
 AVRO_SCHEMA = "avro.schema"
-
-class InvalidAvroBinaryEncoding(Exception):
-    """For invalid numbers of bytes read."""
 
 def read_from_avro(
     avro_text: bytes,
