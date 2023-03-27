@@ -581,6 +581,11 @@ class DatalakeSource(DatabaseServiceSource):
                         data_type = DATALAKE_DATA_TYPES.get(
                             data_frame[column].dtypes.name, DataType.STRING.value
                         )
+                        if (
+                            data_type == DataType.STRING.value
+                            and type(data_frame[column][0]) == dict
+                        ):
+                            data_type = DataType.JSON.value
 
                     parsed_string = {
                         "dataTypeDisplay": data_type,
