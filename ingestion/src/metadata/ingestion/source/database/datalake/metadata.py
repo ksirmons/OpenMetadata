@@ -86,6 +86,7 @@ def ometa_to_dataframe(config_source, client, table):
     """
     Method to get dataframe for profiling
     """
+
     data = None
     if isinstance(config_source, GCSConfig):
         data = DatalakeSource.get_gcs_files(
@@ -99,11 +100,25 @@ def ometa_to_dataframe(config_source, client, table):
             key=table.name.__root__,
             bucket_name=table.databaseSchema.name,
         )
+    if isinstance(config_source, AzureConfig):
+        connection_args = config_source.securityConfig
+        data = DatalakeSource.get_azure_files(
+            client=client,
+            key=table.name.__root__,
+            container_name=table.databaseSchema.name,
+            storage_options={
+                "tenant_id": connection_args.tenantId,
+                "client_id": connection_args.clientId,
+                "client_secret": connection_args.clientSecret.get_secret_value(),
+                "account_name": connection_args.accountName,
+            },
+        )
     if isinstance(data, DatalakeColumnWrapper):
         data = data.dataframes
     return data
 
 
+# pylint: disable=too-many-public-methods
 class DatalakeSource(DatabaseServiceSource):
     """
     Implements the necessary methods to extract
@@ -566,6 +581,19 @@ class DatalakeSource(DatabaseServiceSource):
         return None
 
     @staticmethod
+    def fetch_col_types(data_frame, column_name):
+        data_type = DATALAKE_DATA_TYPES.get(
+            data_frame[column_name].dtypes.name, DataType.STRING.value
+        )
+        if data_type == DataType.FLOAT.value:
+            if data_frame[column_name].dropna().any():
+                if isinstance(data_frame[column_name][0], dict):
+                    return DataType.JSON.value
+                if isinstance(data_frame[column_name][0], str):
+                    return DataType.STRING.value
+        return data_type
+
+    @staticmethod
     def get_columns(data_frame):
         """
         method to process column details
@@ -578,15 +606,7 @@ class DatalakeSource(DatabaseServiceSource):
                 data_type = DataType.STRING.value
                 try:
                     if hasattr(data_frame[column], "dtypes"):
-                        data_type = DATALAKE_DATA_TYPES.get(
-                            data_frame[column].dtypes.name, DataType.STRING.value
-                        )
-                        if (
-                            data_type == DataType.STRING.value
-                            and type(data_frame[column][0]) == dict
-                        ):
-                            data_type = DataType.JSON.value
-
+                        DatalakeSource.fetch_col_types(data_frame, column_name=column)
                     parsed_string = {
                         "dataTypeDisplay": data_type,
                         "dataType": data_type,
