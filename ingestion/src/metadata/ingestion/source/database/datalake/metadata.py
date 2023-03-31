@@ -638,7 +638,9 @@ class DatalakeSource(DatabaseServiceSource):
                 data_type = DataType.STRING.value
                 try:
                     if hasattr(data_frame[column], "dtypes"):
-                        DatalakeSource.fetch_col_types(data_frame, column_name=column)
+                        data_type = DatalakeSource.fetch_col_types(
+                            data_frame, column_name=column
+                        )
                     parsed_string = {
                         "dataTypeDisplay": data_type,
                         "dataType": data_type,
