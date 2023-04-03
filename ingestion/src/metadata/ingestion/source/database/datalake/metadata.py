@@ -627,11 +627,17 @@ class DatalakeSource(DatabaseServiceSource):
             data_frame[column_name].dtypes.name, DataType.STRING.value
         )
         if data_type == DataType.FLOAT.value:
-            if data_frame[column_name].dropna().any():
-                if isinstance(data_frame[column_name][0], dict):
-                    return DataType.JSON.value
-                if isinstance(data_frame[column_name][0], str):
-                    return DataType.STRING.value
+            try:
+                if data_frame[column_name].dropna().any():
+                    if isinstance(data_frame[column_name].iloc[0], dict):
+                        return DataType.JSON.value
+                    if isinstance(data_frame[column_name].iloc[0], str):
+                        return DataType.STRING.value
+            except Exception as err:
+                logger.warning(
+                    f"Failed to disinguish data type for column {column_name}, Falling back to {data_type}, exc: {err}"
+                )
+                logger.debug(traceback.format_exc())
         return data_type
 
     @staticmethod
