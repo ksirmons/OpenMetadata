@@ -68,6 +68,12 @@ class RedshiftCliTest(CliCommonDB.TestSuite, SQACommonMethods):
     def delete_table_and_view(self) -> None:
         SQACommonMethods.delete_table_and_view(self)
 
+    def delete_table_rows(self) -> None:
+        SQACommonMethods.run_delete_queries(self)
+
+    def update_table_row(self) -> None:
+        SQACommonMethods.run_update_queries(self)
+
     @staticmethod
     def get_connector_name() -> str:
         return "redshift"
@@ -151,16 +157,19 @@ class RedshiftCliTest(CliCommonDB.TestSuite, SQACommonMethods):
                         "distinctCount": 22.0,
                         "distinctProportion": 1.0,
                         "duplicateCount": None,
-                        "firstQuartile": -493.42,
+                        "firstQuartile": -451.0775,
                         "histogram": Histogram(
                             boundaries=[
-                                "-999.63 to -369.21",
-                                "-369.21 to 261.22",
-                                "261.22 and up",
+                                "-999.63 to -665.73",
+                                "-665.73 to -331.83",
+                                "-331.83 to 2.06",
+                                "2.06 to 335.96",
+                                "335.96 to 669.86",
+                                "669.86 and up",
                             ],
-                            frequencies=[9, 8, 5],
+                            frequencies=[3, 7, 6, 1, 2, 3],
                         ),
-                        "interQuartileRange": 883.236,
+                        "interQuartileRange": 467.7975,
                         "max": 856.41,
                         "maxLength": None,
                         "mean": -160.16,
@@ -174,7 +183,7 @@ class RedshiftCliTest(CliCommonDB.TestSuite, SQACommonMethods):
                         "nullProportion": 0.0,
                         "stddev": 528.297718809555,
                         "sum": -3518.0,
-                        "thirdQuartile": 389.816,
+                        "thirdQuartile": 16.72,
                         "uniqueCount": 22.0,
                         "uniqueProportion": 1.0,
                         "validCount": None,
@@ -185,3 +194,19 @@ class RedshiftCliTest(CliCommonDB.TestSuite, SQACommonMethods):
                 }
             ],
         }
+
+    @staticmethod
+    def delete_queries() -> List[str]:
+        return [
+            """
+            DELETE FROM e2e_cli_tests.dbt_jaffle.persons WHERE person_id IN (1,2)
+            """,
+        ]
+
+    @staticmethod
+    def update_queries() -> List[str]:
+        return [
+            """
+            UPDATE e2e_cli_tests.dbt_jaffle.persons SET full_name = 'Bruce Wayne' WHERE person_id = 3
+            """,
+        ]

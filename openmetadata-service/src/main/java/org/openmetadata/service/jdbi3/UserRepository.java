@@ -13,6 +13,7 @@
 
 package org.openmetadata.service.jdbi3;
 
+import static org.openmetadata.common.utils.CommonUtil.listOf;
 import static org.openmetadata.common.utils.CommonUtil.listOrEmpty;
 import static org.openmetadata.common.utils.CommonUtil.nullOrEmpty;
 import static org.openmetadata.csv.CsvUtil.addEntityReferences;
@@ -35,12 +36,12 @@ import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 import org.openmetadata.csv.EntityCsv;
 import org.openmetadata.schema.api.teams.CreateTeam.TeamType;
-import org.openmetadata.schema.auth.SSOAuthMechanism;
 import org.openmetadata.schema.entity.teams.AuthenticationMechanism;
 import org.openmetadata.schema.entity.teams.Team;
 import org.openmetadata.schema.entity.teams.User;
 import org.openmetadata.schema.type.EntityReference;
 import org.openmetadata.schema.type.Include;
+import org.openmetadata.schema.type.MetadataOperation;
 import org.openmetadata.schema.type.Relationship;
 import org.openmetadata.schema.type.csv.CsvDocumentation;
 import org.openmetadata.schema.type.csv.CsvErrorType;
@@ -67,7 +68,15 @@ public class UserRepository extends EntityRepository<User> {
   private final EntityReference organization;
 
   public UserRepository(CollectionDAO dao) {
-    super(UserResource.COLLECTION_PATH, USER, User.class, dao.userDAO(), dao, USER_PATCH_FIELDS, USER_UPDATE_FIELDS);
+    super(
+        UserResource.COLLECTION_PATH,
+        USER,
+        User.class,
+        dao.userDAO(),
+        dao,
+        USER_PATCH_FIELDS,
+        USER_UPDATE_FIELDS,
+        listOf(MetadataOperation.EDIT_TEAMS));
     organization = dao.teamDAO().findEntityReferenceByName(Entity.ORGANIZATION_NAME, Include.ALL);
   }
 
@@ -212,19 +221,17 @@ public class UserRepository extends EntityRepository<User> {
   }
 
   public void initializeUsers(OpenMetadataApplicationConfig config) {
+    String providerType = config.getAuthenticationConfiguration().getProvider();
+    // Create Admins
     Set<String> adminUsers = new HashSet<>(config.getAuthorizerConfiguration().getAdminPrincipals());
     LOG.debug("Checking user entries for admin users {}", adminUsers);
     String domain = SecurityUtil.getDomain(config);
-    String providerType = config.getAuthenticationConfiguration().getProvider();
-    if (providerType.equals(SSOAuthMechanism.SsoServiceType.BASIC.value())) {
-      UserUtil.handleBasicAuth(adminUsers, domain);
-    } else {
-      UserUtil.addUsers(adminUsers, domain, true);
-    }
+    UserUtil.addUsers(providerType, adminUsers, domain, true);
 
+    // Create Test Users
     LOG.debug("Checking user entries for test users");
     Set<String> testUsers = new HashSet<>(config.getAuthorizerConfiguration().getTestPrincipals());
-    UserUtil.addUsers(testUsers, domain, null);
+    UserUtil.addUsers(providerType, testUsers, domain, null);
   }
 
   private List<EntityReference> getOwns(User user) throws IOException {
