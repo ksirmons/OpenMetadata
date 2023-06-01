@@ -14,6 +14,7 @@
 import { Checkbox, Col, Row } from 'antd';
 import classNames from 'classnames';
 import { EntityHeader } from 'components/Entity/EntityHeader/EntityHeader.component';
+import TableDataCardBody from 'components/TableDataCardBody/TableDataCardBody';
 import { isString, startCase, uniqueId } from 'lodash';
 import { ExtraInfo } from 'Models';
 import React, { forwardRef, useMemo } from 'react';
@@ -34,8 +35,6 @@ import {
 } from '../../../utils/CommonUtils';
 import { getServiceIcon, getUsagePercentile } from '../../../utils/TableUtils';
 import { SearchedDataProps } from '../../searched-data/SearchedData.interface';
-import '../table-data-card/TableDataCard.style.css';
-import TableDataCardBody from '../table-data-card/TableDataCardBody';
 import './TableDataCardV2.less';
 
 export interface TableDataCardPropsV2 {
@@ -55,6 +54,9 @@ export interface TableDataCardPropsV2 {
   openEntityInNewPage?: boolean;
 }
 
+/**
+ * @deprecated will be removed
+ */
 const TableDataCardV2: React.FC<TableDataCardPropsV2> = forwardRef<
   HTMLDivElement,
   TableDataCardPropsV2
@@ -151,8 +153,8 @@ const TableDataCardV2: React.FC<TableDataCardPropsV2> = forwardRef<
         onClick={() => {
           handleSummaryPanelDisplay && handleSummaryPanelDisplay(source, tab);
         }}>
-        <Row>
-          <Col span={23}>
+        <Row wrap={false}>
+          <Col flex="auto">
             <EntityHeader
               titleIsLink
               breadcrumb={breadcrumbs}
@@ -160,14 +162,14 @@ const TableDataCardV2: React.FC<TableDataCardPropsV2> = forwardRef<
               entityType={source.entityType as EntityType}
               icon={serviceIcon}
               openEntityInNewPage={openEntityInNewPage}
-              serviceName={source.serviceType ?? ''}
+              serviceName={source?.service?.name ?? ''}
             />
           </Col>
-          <Col className="d-flex justify-end" span={1}>
-            {showCheckboxes && (
+          {showCheckboxes && (
+            <Col flex="20px">
               <Checkbox checked={checked} className="m-l-auto" />
-            )}
-          </Col>
+            </Col>
+          )}
         </Row>
 
         <div className="tw-pt-3">
@@ -179,9 +181,7 @@ const TableDataCardV2: React.FC<TableDataCardPropsV2> = forwardRef<
         </div>
         {matches && matches.length > 0 ? (
           <div className="tw-pt-2" data-testid="matches-stats">
-            <span className="tw-text-grey-muted">{`${t(
-              'label.matches'
-            )}:`}</span>
+            <span className="text-grey-muted">{`${t('label.matches')}:`}</span>
             {matches.map((data, i) => (
               <span className="tw-ml-2" key={uniqueId()}>
                 {`${data.value} in ${startCase(data.key)}${

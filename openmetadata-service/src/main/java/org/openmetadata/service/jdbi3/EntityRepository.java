@@ -58,6 +58,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -242,6 +243,16 @@ public abstract class EntityRepository<T extends EntityInterface> {
    * @see TableRepository#storeRelationships(Table) for an example implementation
    */
   public abstract void storeRelationships(T entity) throws IOException;
+
+  /**
+   * This method is called to set inherited property that an entity inherits from its parent.
+   *
+   * @see TableRepository#setInheritedFields(Table) for an example implementation
+   */
+  @SuppressWarnings("unused")
+  public void setInheritedFields(T entity) throws IOException {
+    // Override to set inherited properties
+  }
 
   /**
    * PATCH operations can't overwrite certain fields, such as entity ID, fullyQualifiedNames etc. Instead of throwing an
@@ -517,6 +528,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     entity.setTags(fields.contains(FIELD_TAGS) ? getTags(entity.getFullyQualifiedName()) : null);
     entity.setExtension(fields.contains(FIELD_EXTENSION) ? getExtension(entity) : null);
     setFields(entity, fields);
+    setInheritedFields(entity);
     return entity;
   }
 
@@ -573,6 +585,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     EntityUpdater entityUpdater = getUpdater(original, updated, Operation.PUT);
     entityUpdater.update();
     String change = entityUpdater.fieldsChanged() ? RestUtil.ENTITY_UPDATED : RestUtil.ENTITY_NO_CHANGE;
+    setInheritedFields(updated);
     return new PutResponse<>(Status.OK, withHref(uriInfo, updated), change);
   }
 
@@ -594,6 +607,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     EntityUpdater entityUpdater = getUpdater(original, updated, Operation.PATCH);
     entityUpdater.update();
     String change = entityUpdater.fieldsChanged() ? RestUtil.ENTITY_UPDATED : RestUtil.ENTITY_NO_CHANGE;
+    setInheritedFields(updated);
     return new PatchResponse<>(Status.OK, withHref(uriInfo, updated), change);
   }
 
@@ -836,6 +850,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     storeEntity(entity, false);
     storeExtension(entity);
     storeRelationships(entity);
+    setInheritedFields(entity);
     return entity;
   }
 
@@ -1140,7 +1155,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
       UUID fromId, Relationship relationship, String toEntityType, boolean mustHaveRelationship) throws IOException {
     List<EntityRelationshipRecord> records = findTo(fromId, entityType, relationship, toEntityType);
     ensureSingleRelationship(entityType, fromId, records, relationship.value(), mustHaveRelationship);
-    return records.size() >= 1
+    return !records.isEmpty()
         ? Entity.getEntityReferenceById(records.get(0).getType(), records.get(0).getId(), ALL)
         : null;
   }
@@ -1148,7 +1163,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
   public void ensureSingleRelationship(
       String entityType, UUID id, List<?> relations, String relationshipName, boolean mustHaveRelationship) {
     // An entity can have only one container
-    if (mustHaveRelationship && relations.size() == 0) {
+    if (mustHaveRelationship && relations.isEmpty()) {
       throw new UnhandledServerException(CatalogExceptionMessage.entityTypeNotFound(entityType));
     }
     if (!mustHaveRelationship && relations.isEmpty()) {
@@ -1369,6 +1384,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     protected boolean majorVersionChange = false;
     protected final User updatingUser;
     private boolean entityRestored = false;
+    private boolean entityChanged = false;
 
     public EntityUpdater(T original, T updated, Operation operation) {
       this.original = original;
@@ -1415,7 +1431,7 @@ public abstract class EntityRepository<T extends EntityInterface> {
     private void updateDeleted() throws JsonProcessingException {
       if (operation.isPut() || operation.isPatch()) {
         // Update operation can't set delete attributed to true. This can only be done as part of delete operation
-        if (updated.getDeleted() != original.getDeleted() && Boolean.TRUE.equals(updated.getDeleted())) {
+        if (!Objects.equals(updated.getDeleted(), original.getDeleted()) && Boolean.TRUE.equals(updated.getDeleted())) {
           throw new IllegalArgumentException(CatalogExceptionMessage.readOnlyAttribute(entityType, FIELD_DELETED));
         }
         // PUT or PATCH is restoring the soft-deleted entity
@@ -1552,18 +1568,27 @@ public abstract class EntityRepository<T extends EntityInterface> {
     }
 
     public final <K> boolean recordChange(String field, K orig, K updated) throws JsonProcessingException {
-      return recordChange(field, orig, updated, false, objectMatch);
+      return recordChange(field, orig, updated, false, objectMatch, true);
     }
 
     public final <K> boolean recordChange(String field, K orig, K updated, boolean jsonValue)
         throws JsonProcessingException {
-      return recordChange(field, orig, updated, jsonValue, objectMatch);
+      return recordChange(field, orig, updated, jsonValue, objectMatch, true);
     }
 
     public final <K> boolean recordChange(
         String field, K orig, K updated, boolean jsonValue, BiPredicate<K, K> typeMatch)
         throws JsonProcessingException {
+      return recordChange(field, orig, updated, jsonValue, typeMatch, true);
+    }
+
+    public final <K> boolean recordChange(
+        String field, K orig, K updated, boolean jsonValue, BiPredicate<K, K> typeMatch, boolean updateVersion)
+        throws JsonProcessingException {
       if (orig == updated) {
+        return false;
+      }
+      if (!updateVersion && entityChanged) {
         return false;
       }
       FieldChange fieldChange =
@@ -1572,13 +1597,22 @@ public abstract class EntityRepository<T extends EntityInterface> {
               .withOldValue(jsonValue ? JsonUtils.pojoToJson(orig) : orig)
               .withNewValue(jsonValue ? JsonUtils.pojoToJson(updated) : updated);
       if (orig == null) {
-        changeDescription.getFieldsAdded().add(fieldChange);
+        entityChanged = true;
+        if (updateVersion) {
+          changeDescription.getFieldsAdded().add(fieldChange);
+        }
         return true;
       } else if (updated == null) {
-        changeDescription.getFieldsDeleted().add(fieldChange);
+        entityChanged = true;
+        if (updateVersion) {
+          changeDescription.getFieldsDeleted().add(fieldChange);
+        }
         return true;
       } else if (!typeMatch.test(orig, updated)) {
-        changeDescription.getFieldsUpdated().add(fieldChange);
+        entityChanged = true;
+        if (updateVersion) {
+          changeDescription.getFieldsUpdated().add(fieldChange);
+        }
         return true;
       }
       return false;
@@ -1727,6 +1761,8 @@ public abstract class EntityRepository<T extends EntityInterface> {
       if (updateVersion(original.getVersion())) { // Update changed the entity version
         storeOldVersion(); // Store old version for listing previous versions of the entity
         storeNewVersion(); // Store the update version of the entity
+      } else if (entityChanged) {
+        storeNewVersion();
       } else { // Update did not change the entity version
         updated.setUpdatedBy(original.getUpdatedBy());
         updated.setUpdatedAt(original.getUpdatedAt());

@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.openmetadata.common.utils.CommonUtil;
 import org.openmetadata.schema.email.SmtpSettings;
@@ -88,6 +89,8 @@ public class EmailUtil {
   private static Mailer MAILER;
   private static Configuration TEMPLATE_CONFIGURATION;
 
+  private static final String EMAIL_IGNORE_MSG = "Email was not sent to %s as SMTP setting is not enabled";
+
   private EmailUtil() {
     try {
       STORED_SMTP_SETTINGS = getSmtpSettings();
@@ -145,6 +148,8 @@ public class EmailUtil {
           user.getEmail(),
           EMAIL_TEMPLATE_BASEPATH,
           ACCOUNT_STATUS_TEMPLATE_FILE);
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, user.getEmail()));
     }
   }
 
@@ -162,6 +167,8 @@ public class EmailUtil {
           user.getEmail(),
           EMAIL_TEMPLATE_BASEPATH,
           EMAIL_VERIFICATION_TEMPLATE_PATH);
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, user.getEmail()));
     }
   }
 
@@ -176,6 +183,8 @@ public class EmailUtil {
       templatePopulator.put(EXPIRATION_TIME_KEY, DEFAULT_EXPIRATION_TIME);
 
       sendMail(subject, templatePopulator, user.getEmail(), EMAIL_TEMPLATE_BASEPATH, templateFilePath);
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, user.getEmail()));
     }
   }
 
@@ -194,6 +203,8 @@ public class EmailUtil {
       templatePopulator.put("taskLink", taskLink);
 
       sendMail(subject, templatePopulator, email, EMAIL_TEMPLATE_BASEPATH, templateFilePath);
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, email));
     }
   }
 
@@ -225,6 +236,29 @@ public class EmailUtil {
       EmailPopulatingBuilder emailBuilder = EmailBuilder.startingBlank();
       emailBuilder.withSubject(subject);
       emailBuilder.to(to);
+      emailBuilder.from(getSmtpSettings().getSenderMail());
+
+      TEMPLATE_CONFIGURATION.setClassForTemplateLoading(getClass(), baseTemplatePackage);
+      Template template = TEMPLATE_CONFIGURATION.getTemplate(templatePath);
+
+      // write the freemarker output to a StringWriter
+      StringWriter stringWriter = new StringWriter();
+      template.process(model, stringWriter);
+      String mailContent = stringWriter.toString();
+      emailBuilder.withHTMLText(mailContent);
+      sendMail(emailBuilder.buildEmail());
+    } else {
+      LOG.warn(EMAIL_IGNORE_MSG, to);
+    }
+  }
+
+  public void sendMailToMultiple(
+      String subject, Map<String, Object> model, Set<String> to, String baseTemplatePackage, String templatePath)
+      throws IOException, TemplateException {
+    if (Boolean.TRUE.equals(getSmtpSettings().getEnableSmtpServer())) {
+      EmailPopulatingBuilder emailBuilder = EmailBuilder.startingBlank();
+      emailBuilder.withSubject(subject);
+      emailBuilder.toMultiple(to);
       emailBuilder.from(getSmtpSettings().getSenderMail());
 
       TEMPLATE_CONFIGURATION.setClassForTemplateLoading(getClass(), baseTemplatePackage);
@@ -277,6 +311,8 @@ public class EmailUtil {
       } catch (Exception ex) {
         LOG.error("Failed in sending Mail to user [{}]. Reason : {}", user.getEmail(), ex.getMessage());
       }
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, user.getEmail()));
     }
   }
 
@@ -303,11 +339,13 @@ public class EmailUtil {
       } catch (Exception ex) {
         LOG.error("Failed in sending Mail to user [{}]. Reason : {}", receiverMail, ex.getMessage());
       }
+    } else {
+      LOG.warn(String.format(EMAIL_IGNORE_MSG, receiverMail));
     }
   }
 
   public void sendDataInsightEmailNotificationToUser(
-      String email,
+      Set<String> emails,
       DataInsightTotalAssetTemplate totalAssetObj,
       DataInsightDescriptionAndOwnerTemplate descriptionObj,
       DataInsightDescriptionAndOwnerTemplate ownerShipObj,
@@ -321,7 +359,9 @@ public class EmailUtil {
       templatePopulator.put("descriptionObj", descriptionObj);
       templatePopulator.put("ownershipObj", ownerShipObj);
       templatePopulator.put("tierObj", tierObj);
-      sendMail(subject, templatePopulator, email, EMAIL_TEMPLATE_BASEPATH, templateFilePath);
+      sendMailToMultiple(subject, templatePopulator, emails, EMAIL_TEMPLATE_BASEPATH, templateFilePath);
+    } else {
+      LOG.warn(EMAIL_IGNORE_MSG, emails.toString());
     }
   }
 

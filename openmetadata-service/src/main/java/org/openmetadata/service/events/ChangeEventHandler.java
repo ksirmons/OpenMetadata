@@ -168,12 +168,13 @@ public class ChangeEventHandler implements EventHandler {
       return (ChangeEvent) responseContext.getEntity();
     }
 
-    // Entity was hard deleted by DELETE .../entities/{id}
+    // Entity was hard deleted by DELETE ../entities/{id}?hardDelete=true
     if (changeType.equals(RestUtil.ENTITY_DELETED)) {
       EntityInterface entityInterface = (EntityInterface) responseContext.getEntity();
       EntityReference entityReference = entityInterface.getEntityReference();
       String entityType = entityReference.getType();
       String entityFQN = entityReference.getFullyQualifiedName();
+      deleteAllConversationsRelatedToEntity(entityInterface);
       return getChangeEvent(updateBy, ENTITY_DELETED, entityType, entityInterface)
           .withPreviousVersion(entityInterface.getVersion())
           .withEntity(entityInterface)
@@ -256,8 +257,8 @@ public class ChangeEventHandler implements EventHandler {
         ChangeEventParser.getFormattedMessages(PublishTo.FEED, changeDescription, entity);
 
     // Create an automated thread
-    for (EntityLink link : messages.keySet()) {
-      threads.add(getThread(link.getLinkString(), messages.get(link), loggedInUserName));
+    for (Map.Entry<EntityLink, String> entry : messages.entrySet()) {
+      threads.add(getThread(entry.getKey().getLinkString(), entry.getValue(), loggedInUserName));
     }
 
     return threads;
@@ -273,6 +274,15 @@ public class ChangeEventHandler implements EventHandler {
         .withUpdatedBy(loggedInUserName)
         .withUpdatedAt(System.currentTimeMillis())
         .withMessage(message);
+  }
+
+  private void deleteAllConversationsRelatedToEntity(EntityInterface entityInterface) {
+    String entityId = entityInterface.getId().toString();
+    List<String> threadIds = dao.feedDAO().findByEntityId(entityId);
+    for (String threadId : threadIds) {
+      dao.relationshipDAO().deleteAll(threadId, Entity.THREAD);
+      dao.feedDAO().delete(threadId);
+    }
   }
 
   public void close() {

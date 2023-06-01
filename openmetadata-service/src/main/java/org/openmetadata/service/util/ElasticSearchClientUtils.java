@@ -22,6 +22,7 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.client.RestHighLevelClient;
@@ -47,6 +48,11 @@ public final class ElasticSearchClientUtils {
               if (sslContext != null) {
                 httpAsyncClientBuilder.setSSLContext(sslContext);
               }
+              // Enable TCP keep alive strategy
+              if (esConfig.getKeepAliveTimeoutSecs() != null && esConfig.getKeepAliveTimeoutSecs() > 0) {
+                httpAsyncClientBuilder.setKeepAliveStrategy(
+                    (response, context) -> esConfig.getKeepAliveTimeoutSecs() * 1000);
+              }
               return httpAsyncClientBuilder;
             });
       }
@@ -57,7 +63,7 @@ public final class ElasticSearchClientUtils {
                   .setSocketTimeout(esConfig.getSocketTimeoutSecs() * 1000));
       return new RestHighLevelClient(restClientBuilder);
     } catch (Exception e) {
-      throw new RuntimeException("Failed to create elastic search client ", e);
+      throw new ElasticsearchException("Failed to create elastic search client ", e);
     }
   }
 

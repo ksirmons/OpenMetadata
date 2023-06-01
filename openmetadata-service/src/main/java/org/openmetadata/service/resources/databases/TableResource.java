@@ -155,6 +155,11 @@ public class TableResource extends EntityResource<Table, TableRepository> {
               schema = @Schema(type = "string", example = "snowflakeWestCoast.financeDB"))
           @QueryParam("database")
           String databaseParam,
+      @Parameter(
+              description = "Filter tables by databaseSchema fully qualified name",
+              schema = @Schema(type = "string", example = "snowflakeWestCoast.financeDB.schema"))
+          @QueryParam("databaseSchema")
+          String databaseSchemaParam,
       @Parameter(description = "Limit the number tables returned. (1 to 1000000, default = " + "10) ")
           @DefaultValue("10")
           @Min(0)
@@ -174,7 +179,10 @@ public class TableResource extends EntityResource<Table, TableRepository> {
           @DefaultValue("non-deleted")
           Include include)
       throws IOException {
-    ListFilter filter = new ListFilter(include).addQueryParam("database", databaseParam);
+    ListFilter filter =
+        new ListFilter(include)
+            .addQueryParam("database", databaseParam)
+            .addQueryParam("databaseSchema", databaseSchemaParam);
     return super.listInternal(uriInfo, securityContext, fieldsParam, filter, limitParam, before, after);
   }
 
@@ -509,8 +517,7 @@ public class TableResource extends EntityResource<Table, TableRepository> {
   public Table getSampleData(
       @Context UriInfo uriInfo,
       @Context SecurityContext securityContext,
-      @Parameter(description = "Id of the table", schema = @Schema(type = "UUID")) @PathParam("id") UUID id,
-      @Valid TableData tableData)
+      @Parameter(description = "Id of the table", schema = @Schema(type = "UUID")) @PathParam("id") UUID id)
       throws IOException {
     OperationContext operationContext = new OperationContext(entityType, MetadataOperation.VIEW_SAMPLE_DATA);
     authorizer.authorize(securityContext, operationContext, getResourceContextById(id));
@@ -532,8 +539,7 @@ public class TableResource extends EntityResource<Table, TableRepository> {
   public Table deleteSampleData(
       @Context UriInfo uriInfo,
       @Context SecurityContext securityContext,
-      @Parameter(description = "Id of the table", schema = @Schema(type = "UUID")) @PathParam("id") UUID id,
-      @Valid TableData tableData)
+      @Parameter(description = "Id of the table", schema = @Schema(type = "UUID")) @PathParam("id") UUID id)
       throws IOException {
     OperationContext operationContext = new OperationContext(entityType, MetadataOperation.EDIT_SAMPLE_DATA);
     authorizer.authorize(securityContext, operationContext, getResourceContextById(id));
@@ -907,15 +913,16 @@ public class TableResource extends EntityResource<Table, TableRepository> {
 
   private Table getTable(CreateTable create, String user) throws IOException {
     return validateNewTable(
-        copy(new Table(), create, user)
-            .withColumns(create.getColumns())
-            .withTableConstraints(create.getTableConstraints())
-            .withTablePartition(create.getTablePartition())
-            .withTableType(create.getTableType())
-            .withTags(create.getTags())
-            .withViewDefinition(create.getViewDefinition())
-            .withTableProfilerConfig(create.getTableProfilerConfig())
-            .withDatabaseSchema(getEntityReference(Entity.DATABASE_SCHEMA, create.getDatabaseSchema())));
+            copy(new Table(), create, user)
+                .withColumns(create.getColumns())
+                .withTableConstraints(create.getTableConstraints())
+                .withTablePartition(create.getTablePartition())
+                .withTableType(create.getTableType())
+                .withTags(create.getTags())
+                .withViewDefinition(create.getViewDefinition())
+                .withTableProfilerConfig(create.getTableProfilerConfig())
+                .withDatabaseSchema(getEntityReference(Entity.DATABASE_SCHEMA, create.getDatabaseSchema())))
+        .withRetentionPeriod(create.getRetentionPeriod());
   }
 
   private CustomMetric getCustomMetric(SecurityContext securityContext, CreateCustomMetric create) {

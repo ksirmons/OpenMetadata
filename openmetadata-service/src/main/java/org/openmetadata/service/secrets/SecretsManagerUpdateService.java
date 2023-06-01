@@ -117,21 +117,16 @@ public class SecretsManagerUpdateService {
       service
           .getConnection()
           .setConfig(
-              oldSecretManager.encryptOrDecryptServiceConnectionConfig(
-                  service.getConnection().getConfig(),
-                  service.getServiceType().value(),
-                  service.getName(),
-                  repository.getServiceType(),
-                  false));
+              oldSecretManager.decryptServiceConnectionConfig(
+                  service.getConnection().getConfig(), service.getServiceType().value(), repository.getServiceType()));
       service
           .getConnection()
           .setConfig(
-              secretManager.encryptOrDecryptServiceConnectionConfig(
+              secretManager.encryptServiceConnectionConfig(
                   service.getConnection().getConfig(),
                   service.getServiceType().value(),
                   service.getName(),
-                  repository.getServiceType(),
-                  true));
+                  repository.getServiceType()));
       repository.dao.update(service);
     } catch (IOException e) {
       throw new SecretsManagerUpdateException(e.getMessage(), e.getCause());
@@ -167,17 +162,16 @@ public class SecretsManagerUpdateService {
 
   private Map<Class<? extends ServiceConnectionEntityInterface>, ServiceEntityRepository<?, ?>>
       retrieveConnectionTypeRepositoriesMap() {
-    Map<Class<? extends ServiceConnectionEntityInterface>, ServiceEntityRepository<?, ?>>
-        connectionTypeRepositoriesMap =
-            CollectionRegistry.getInstance().getCollectionMap().values().stream()
-                .map(this::retrieveServiceRepository)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toMap(ServiceEntityRepository::getServiceConnectionClass, Function.identity()));
-    if (connectionTypeRepositoriesMap.isEmpty()) {
+    Map<Class<? extends ServiceConnectionEntityInterface>, ServiceEntityRepository<?, ?>> connTypeRepositoriesMap =
+        CollectionRegistry.getInstance().getCollectionMap().values().stream()
+            .map(this::retrieveServiceRepository)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .collect(Collectors.toMap(ServiceEntityRepository::getServiceConnectionClass, Function.identity()));
+    if (connTypeRepositoriesMap.isEmpty()) {
       throw new SecretsManagerUpdateException("Unexpected error: ServiceRepository not found.");
     }
-    return connectionTypeRepositoriesMap;
+    return connTypeRepositoriesMap;
   }
 
   private Optional<ServiceEntityRepository<?, ?>> retrieveServiceRepository(CollectionDetails collectionDetails) {
@@ -219,9 +213,8 @@ public class SecretsManagerUpdateService {
   private void updateBotUser(User botUser) {
     try {
       User user = userRepository.dao.findEntityById(botUser.getId());
-      oldSecretManager.encryptOrDecryptAuthenticationMechanism(
-          botUser.getName(), user.getAuthenticationMechanism(), false);
-      secretManager.encryptOrDecryptAuthenticationMechanism(botUser.getName(), user.getAuthenticationMechanism(), true);
+      oldSecretManager.decryptAuthenticationMechanism(botUser.getName(), user.getAuthenticationMechanism());
+      secretManager.encryptAuthenticationMechanism(botUser.getName(), user.getAuthenticationMechanism());
       userRepository.dao.update(user);
     } catch (IOException e) {
       throw new SecretsManagerUpdateException(e.getMessage(), e.getCause());
@@ -262,8 +255,8 @@ public class SecretsManagerUpdateService {
     try {
       IngestionPipeline ingestion = ingestionPipelineRepository.dao.findEntityById(ingestionPipeline.getId());
       // we have to decrypt using the old secrets manager and encrypt again with the new one
-      oldSecretManager.encryptOrDecryptIngestionPipeline(ingestionPipeline, false);
-      secretManager.encryptOrDecryptIngestionPipeline(ingestionPipeline, true);
+      oldSecretManager.decryptIngestionPipeline(ingestionPipeline);
+      secretManager.encryptIngestionPipeline(ingestionPipeline);
       ingestionPipelineRepository.dao.update(ingestion);
     } catch (IOException e) {
       throw new SecretsManagerUpdateException(e.getMessage(), e.getCause());
@@ -274,8 +267,8 @@ public class SecretsManagerUpdateService {
     try {
       Workflow workflowObject = workflowRepository.dao.findEntityById(workflow.getId());
       // we have to decrypt using the old secrets manager and encrypt again with the new one
-      workflowObject = oldSecretManager.encryptOrDecryptWorkflow(workflowObject, false);
-      workflowObject = secretManager.encryptOrDecryptWorkflow(workflowObject, true);
+      workflowObject = oldSecretManager.decryptWorkflow(workflowObject);
+      workflowObject = secretManager.encryptWorkflow(workflowObject);
       ingestionPipelineRepository.dao.update(workflowObject);
     } catch (IOException e) {
       throw new SecretsManagerUpdateException(e.getMessage(), e.getCause());
